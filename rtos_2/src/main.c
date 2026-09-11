@@ -9,18 +9,6 @@
  * CONFIG_HEAP_MEM_POOL_SIZE=1024
  * to prj.conf
  ****************************/
-// Condition Variables
-K_MUTEX_DEFINE(red_mutex);
-K_CONDVAR_DEFINE(red_signal);
-
-K_MUTEX_DEFINE(yellow_mutex);
-K_CONDVAR_DEFINE(yellow_signal);
-
-K_MUTEX_DEFINE(green_mutex);
-K_CONDVAR_DEFINE(green_signal);
-
-K_MUTEX_DEFINE(release_mutex);
-K_CONDVAR_DEFINE(release_signal);
 
 // Thread initializations
 #define STACKSIZE 500
@@ -35,11 +23,19 @@ void green_led_task(void *, void *, void*);
 
 void dispatcher_task(void *, void *, void*);
 void uart_task(void *, void *, void*);
-K_THREAD_DEFINE(red_thread,STACKSIZE,red_led_task,NULL,NULL,NULL,PRIORITY,0,0);
-K_THREAD_DEFINE(yellow_thread,STACKSIZE,yellow_led_task,NULL,NULL,NULL,PRIORITY,0,0);
-K_THREAD_DEFINE(green_thread,STACKSIZE,green_led_task,NULL,NULL,NULL,PRIORITY,0,0);
+
 K_THREAD_DEFINE(dis_thread,STACKSIZE,dispatcher_task,NULL,NULL,NULL,PRIORITY,0,0);
 K_THREAD_DEFINE(uart_thread,STACKSIZE,uart_task,NULL,NULL,NULL,PRIORITY,0,0);
+
+//Define stacks for thread memory
+K_THREAD_STACK_DEFINE(red_stack, STACKSIZE);
+K_THREAD_STACK_DEFINE(yellow_stack, STACKSIZE);
+K_THREAD_STACK_DEFINE(green_stack, STACKSIZE);
+
+//Struct for data about the thread for the kernel
+static struct k_thread red_thread_data;
+static struct k_thread yellow_thread_data;
+static struct k_thread green_thread_data;
 
 
 // UART initialization
@@ -106,10 +102,11 @@ int main(void)
 		return ret;
 	}
 
-	init_led();
-
-	
-
+	ret = init_led();
+	if(ret != 0){
+		printk("LED initilization failed\n");
+		return ret;
+	}
 	return 0;
 }
 
@@ -151,16 +148,12 @@ void uart_task(void *unused1, void *unused2, void *unused3)
 
 				// Clear UART receive buffer
 				uart_msg_cnt = 0;
-				memset(uart_msg,0,20);
+				memset(uart_msg, 0, sizeof(uart_msg));
 
-				// Clear UART message buffer
-				uart_msg_cnt = 0;
-				memset(uart_msg,0,20);
 			}
 		}
 		k_msleep(10);
 	}
-	return 0;
 }
 
 /********************
@@ -183,60 +176,79 @@ void dispatcher_task(void *unused1, void *unused2, void *unused3)
 			//printk("%c\n", sequence[cnt]);
 
 			if (sequence[cnt] == 'R'){
-				printk("RED");
-				k_condvar_broadcast(&red_signal);
+				printk("RED\n");
+				//Create a thread
+				k_thread_create(&red_thread_data,red_stack,
+								K_THREAD_STACK_SIZEOF(red_stack),
+								red_led_task,
+								NULL,
+								NULL,
+								NULL,
+								PRIORITY,
+								0,
+								K_NO_WAIT
+							);
+				//Sleep until the thread exits (red thread runs through)
+				k_thread_join(&red_thread_data,K_FOREVER);
 			}
 			
-			if (sequence[cnt] == 'Y'){
-				printk("YELLOW");
-				k_condvar_broadcast(&yellow_signal);
+			else if (sequence[cnt] == 'Y'){
+				printk("YELLOW\n");
+				//Create a thread
+				k_thread_create(&yellow_thread_data,yellow_stack,
+								K_THREAD_STACK_SIZEOF(yellow_stack),
+								yellow_led_task,
+								NULL,
+								NULL,
+								NULL,
+								PRIORITY,
+								0,
+								K_NO_WAIT
+							);
+				//Sleep until the thread exits (red thread runs through)
+				k_thread_join(&yellow_thread_data,K_FOREVER);
 			}
 
-				if (sequence[cnt] == 'G'){
-				printk("GREEN");
-				k_condvar_broadcast(&green_signal);
+			else if (sequence[cnt] == 'G'){
+				printk("GREEN\n");
+				//Create a thread
+				k_thread_create(&green_thread_data,green_stack,
+								K_THREAD_STACK_SIZEOF(green_stack),
+								green_led_task,
+								NULL,
+								NULL,
+								NULL,
+								PRIORITY,
+								0,
+								K_NO_WAIT
+							);
+				//Sleep until the thread exits (red thread runs through)
+				k_thread_join(&green_thread_data,K_FOREVER);
+			} else {
+				printk("Unknown input\n");
 			}
 			cnt ++;
-			k_condvar_wait(&release_signal, &release_mutex, K_FOREVER);
 		}
-
-        // You need to:gg
-        // Parse color and time from the fifo data
-        // Example
-        //    char color = sequence[0];
-        //    int time = atoi(sequence+2);
-		//    printk("Data: %c %d\n", color, time);
-        // Send the parsed color information to tasks using fifo
-        // Use release signal to control sequence or k_yield
 	}
 }
 
 void red_led_task(void *, void *, void*) {
-	printk("Red led thread started\n");
-	while (true) {
-
-		k_condvar_wait(&red_signal, &red_mutex, K_FOREVER);
+	printk("Thread API red_led_task started\n");
 
 		// LED ON
 		gpio_pin_set_dt(&red,1);
 		printk("Red on\n");
+
 		//SLEEP
 		k_sleep(K_SECONDS(1));
+
 		//LED OFF
 		gpio_pin_set_dt(&red,0);
 		printk("Red off\n");
-
-		//RELEASE SIGNAL
-		k_condvar_broadcast(&release_signal);
-	}
 }
 
 void green_led_task(void *, void *, void*) {
-	printk("Green led thread started\n");
-	while (true) {
-
-		k_condvar_wait(&green_signal, &green_mutex, K_FOREVER);
-
+	printk("API Green led thread started\n");
 		// 1. set led on 
 		gpio_pin_set_dt(&green,1);
 		printk("GReen on\n");
@@ -247,16 +259,10 @@ void green_led_task(void *, void *, void*) {
 		// 3. set led off
 		gpio_pin_set_dt(&green,0);
 		printk("Green off\n");
-
-		k_condvar_broadcast(&release_signal);
-	}
 }
 
 void yellow_led_task(void *, void *, void*) {
-	printk("yellow led thread started\n");
-	while (true) {
-
-		k_condvar_wait(&yellow_signal, &yellow_mutex, K_FOREVER);
+	printk("API yellow led thread started\n");
 
 		// 1. set led on 
 		gpio_pin_set_dt(&red,1);
@@ -270,7 +276,4 @@ void yellow_led_task(void *, void *, void*) {
 		gpio_pin_set_dt(&red,0);
 		gpio_pin_set_dt(&green,0);
 		printk("yellow off\n");
-
-		k_condvar_broadcast(&release_signal);
-	}
 }
