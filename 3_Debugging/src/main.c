@@ -14,16 +14,71 @@
 #define STACKSIZE 500
 #define PRIORITY 5
 
+
+// Configure buttons
+#define BUTTON_0 DT_ALIAS(sw0)
+static const struct gpio_dt_spec button_0 = GPIO_DT_SPEC_GET_OR(BUTTON_0, gpios, {0});
+static struct gpio_callback button_0_data;
+
+#define BUTTON_1 DT_ALIAS(sw1)
+static const struct gpio_dt_spec button_1 = GPIO_DT_SPEC_GET_OR(BUTTON_1, gpios, {0});
+static struct gpio_callback button_1_data;
+
+#define BUTTON_2 DT_ALIAS(sw2)
+static const struct gpio_dt_spec button_2 = GPIO_DT_SPEC_GET_OR(BUTTON_2, gpios, {0});
+static struct gpio_callback button_2_data;
+
+#define BUTTON_3 DT_ALIAS(sw3)
+static const struct gpio_dt_spec button_3 = GPIO_DT_SPEC_GET_OR(BUTTON_3, gpios, {0});
+static struct gpio_callback button_3_data;
+
+#define BUTTON_4 DT_ALIAS(sw4)
+static const struct gpio_dt_spec button_4 = GPIO_DT_SPEC_GET_OR(BUTTON_4, gpios, {0});
+static struct gpio_callback button_4_data;
+//
+
+// Button interrupt handlers
+//
+void button_0_handler(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
+{
+	printk("Button 0 pressed\n");
+}
+
+void button_1_handler(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
+{
+	printk("Button 1 pressed\n");
+}
+
+void button_2_handler(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
+{
+	printk("Button 2 pressed\n");
+}
+
+void button_3_handler(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
+{
+	printk("Button 3 pressed\n");
+}
+
+void button_4_handler(const struct device *dev, struct gpio_callback *cb, uint32_t pins)
+{
+	printk("Button_4 pressed\n");
+}
+//
+
+//Configure leds
 static const struct gpio_dt_spec red = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
 static const struct gpio_dt_spec green = GPIO_DT_SPEC_GET(DT_ALIAS(led1), gpios);
+//
 
+//Tasks
 void red_led_task(void *, void *, void*);
 void yellow_led_task(void *, void *, void*);
 void green_led_task(void *, void *, void*);
-
 void dispatcher_task(void *, void *, void*);
 void uart_task(void *, void *, void*);
+//
 
+// Define threads for dispatcher and uart
 K_THREAD_DEFINE(dis_thread,STACKSIZE,dispatcher_task,NULL,NULL,NULL,PRIORITY,0,0);
 K_THREAD_DEFINE(uart_thread,STACKSIZE,uart_task,NULL,NULL,NULL,PRIORITY,0,0);
 
@@ -49,24 +104,138 @@ K_FIFO_DEFINE(dispatcher_fifo);
 
 // FIFO dispatcher data type
 struct data_t {
-	/*************************
 	// Add fifo_reserved below
-	*************************/
 	void *fifo_reserved;
 	char msg[20];
 };
 
-/********************
- * init UART
- */
+// UART initialization call in MAIN
 int init_uart(void) {
-	// UART initialization
+
 	if (!device_is_ready(uart_dev)) {
 		return 1;
 	} 
 	return 0;
 }
 
+// BUTTON initilization call in  MAIN
+int init_button() {
+
+	int ret;
+	//Button 0
+	if (!gpio_is_ready_dt(&button_0)) {
+		printk("Error: button 0 is not ready\n");
+		return -1;
+	}
+
+	ret = gpio_pin_configure_dt(&button_0, GPIO_INPUT);
+	if (ret != 0) {
+		printk("Error: failed to configure pin\n");
+		return -1;
+	}
+
+	ret = gpio_pin_interrupt_configure_dt(&button_0, GPIO_INT_EDGE_TO_ACTIVE);
+	if (ret != 0) {
+		printk("Error: failed to configure interrupt on pin\n");
+		return -1;
+	}
+
+	gpio_init_callback(&button_0_data, button_0_handler, BIT(button_0.pin));
+	gpio_add_callback(button_0.port, &button_0_data);
+	printk("Set up button 0 ok\n");
+	
+	//Button 1
+    if (!gpio_is_ready_dt(&button_1)) {
+        printk("Error: button 1 is not ready\n");
+        return -1;
+    }
+
+    ret = gpio_pin_configure_dt(&button_1, GPIO_INPUT);
+    if (ret != 0) {
+        printk("Error: failed to configure pin\n");
+        return -1;
+    }
+
+    ret = gpio_pin_interrupt_configure_dt(&button_1, GPIO_INT_EDGE_TO_ACTIVE);
+    if (ret != 0) {
+        printk("Error: failed to configure interrupt on pin\n");
+        return -1;
+    }
+
+    gpio_init_callback(&button_1_data, button_1_handler, BIT(button_1.pin));
+    gpio_add_callback(button_1.port, &button_1_data);
+    printk("Set up button 1 ok\n");
+
+	//Button 2
+    if (!gpio_is_ready_dt(&button_2)) {
+        printk("Error: button 2 is not ready\n");
+        return -1;
+    }
+
+    ret = gpio_pin_configure_dt(&button_2, GPIO_INPUT);
+    if (ret != 0) {
+        printk("Error: failed to configure pin\n");
+        return -1;
+    }
+
+    ret = gpio_pin_interrupt_configure_dt(&button_2, GPIO_INT_EDGE_TO_ACTIVE);
+    if (ret != 0) {
+        printk("Error: failed to configure interrupt on pin\n");
+        return -1;
+    }
+
+    gpio_init_callback(&button_2_data, button_2_handler, BIT(button_2.pin));
+    gpio_add_callback(button_2.port, &button_2_data);
+    printk("Set up button 2 ok\n");
+
+	//Button 3
+    if (!gpio_is_ready_dt(&button_3)) {
+        printk("Error: button_3 is not ready\n");
+        return -1;
+    }
+
+    ret = gpio_pin_configure_dt(&button_3, GPIO_INPUT);
+    if (ret != 0) {
+        printk("Error: failed to configure pin\n");
+        return -1;
+    }
+
+    ret = gpio_pin_interrupt_configure_dt(&button_3, GPIO_INT_EDGE_TO_ACTIVE);
+    if (ret != 0) {
+        printk("Error: failed to configure interrupt on pin\n");
+        return -1;
+    }
+
+    gpio_init_callback(&button_3_data, button_3_handler, BIT(button_3.pin));
+    gpio_add_callback(button_3.port, &button_3_data);
+    printk("Set up button_3 ok\n");
+
+	//Button 4
+    if (!gpio_is_ready_dt(&button_4)) {
+        printk("Error: button_4 is not ready\n");
+        return -1;
+    }
+
+    ret = gpio_pin_configure_dt(&button_4, GPIO_INPUT);
+    if (ret != 0) {
+        printk("Error: failed to configure pin\n");
+        return -1;
+    }
+
+    ret = gpio_pin_interrupt_configure_dt(&button_4, GPIO_INT_EDGE_TO_ACTIVE);
+    if (ret != 0) {
+        printk("Error: failed to configure interrupt on pin\n");
+        return -1;
+    }
+
+    gpio_init_callback(&button_4_data, button_4_handler, BIT(button_4.pin));
+    gpio_add_callback(button_4.port, &button_4_data);
+    printk("Set up button_4 ok\n");
+
+	return 0;
+}
+
+// LED initilization call in MAIN
 int  init_led() {
 
 	// RED LED INIT
@@ -91,9 +260,7 @@ int  init_led() {
 }
 
 
-/********************
- * Main task
- */
+
 int main(void)
 {
 	int ret = init_uart();
@@ -103,8 +270,14 @@ int main(void)
 	}
 
 	ret = init_led();
-	if(ret != 0){
+	if (ret != 0) {
 		printk("LED initilization failed\n");
+		return ret;
+	}
+
+	ret = init_button();
+	if (ret != 0) {
+		printk("BUTTON initilization failed\n");
 		return ret;
 	}
 	return 0;
