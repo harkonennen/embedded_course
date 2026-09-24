@@ -1,3 +1,9 @@
+// Debug tehtäviin on toteutettu 1 pisteen osio, jossa mitataan led taskien ajat
+//Moodlen palautuksessa ajat debug tekstit päällä / pois
+
+// Tähän koodiin on nyt yhdistetty toimintoja RTOS 1 ja RTOS 2 koodeista.
+//Valoja voidaan ohjata laudan napeilla, sekä terminaaliin kirjoittamalla.
+
 #include <zephyr/kernel.h>
 #include <zephyr/sys/printk.h>
 #include <zephyr/device.h>
@@ -11,6 +17,8 @@
 #define STACKSIZE 500
 #define PRIORITY 5
 
+//Total timer for a light sequence in microseconds
+uint64_t sequence_total_us = 0;
 
 // Configure buttons
 #define BUTTON_0 DT_ALIAS(sw0)
@@ -198,23 +206,23 @@ int init_uart(void) {
 	return 0;
 }
 
-
 // BUTTON initilization call in MAIN
-int init_button() 
+int init_button(){
 
+	
 	int ret;
 	//Button 0
 	if (!gpio_is_ready_dt(&button_0)) {
 		printk("Error: button 0 is not ready\n");
 		return -1;
 	}
-
+	
 	ret = gpio_pin_configure_dt(&button_0, GPIO_INPUT);
 	if (ret != 0) {
 		printk("Error: failed to configure pin\n");
 		return -1;
 	}
-
+	
 	ret = gpio_pin_interrupt_configure_dt(&button_0, GPIO_INT_EDGE_TO_ACTIVE);
 	if (ret != 0) {
 		printk("Error: failed to configure interrupt on pin\n");
@@ -286,7 +294,7 @@ int init_button()
 		printk("Error: failed to configure interrupt on pin\n");
 		return -1;
 	}
-
+	
 	gpio_init_callback(&button_3_data, button_3_handler, BIT(button_3.pin));
 	gpio_add_callback(button_3.port, &button_3_data);
 	printk("Set up button_3 ok\n");
@@ -302,7 +310,7 @@ int init_button()
 		printk("Error: failed to configure pin\n");
 		return -1;
 	}
-
+	
 	ret = gpio_pin_interrupt_configure_dt(&button_4, GPIO_INT_EDGE_TO_ACTIVE);
 	if (ret != 0) {
 		printk("Error: failed to configure interrupt on pin\n");
@@ -312,14 +320,12 @@ int init_button()
 	gpio_init_callback(&button_4_data, button_4_handler, BIT(button_4.pin));
 	gpio_add_callback(button_4.port, &button_4_data);
 	printk("Set up button_4 ok\n");
-
+	
 	return 0;
 }
 
-
 // LED initilization call in MAIN
 int init_led() {
-
 	// RED LED INIT
 	int ret = gpio_pin_configure_dt(&red, GPIO_OUTPUT_ACTIVE);
 	if (ret < 0) {
@@ -342,7 +348,6 @@ int init_led() {
 
 	return 0;
 }
-
 
 int main(void)
 {
@@ -434,12 +439,13 @@ void dispatcher_task(void *unused1, void *unused2, void *unused3)
 
 		printk("Dispatcher: %s\n",sequence);
 		int cnt = 0;
+		sequence_total_us = 0;
 
 		// Go through sequence one character at a time
 		while (sequence[cnt] != 0){
 
 			if (sequence[cnt] == 'R'){
-				printk("RED\n");
+				printk("Dispatcher RED\n");
 
 				//Create a thread
 				k_thread_create(&red_thread_data,red_stack,
@@ -458,7 +464,7 @@ void dispatcher_task(void *unused1, void *unused2, void *unused3)
 			}
 			
 			else if (sequence[cnt] == 'Y'){
-				printk("YELLOW\n");
+				printk("Dispatcher YELLOW\n");
 
 				//Create a thread
 				k_thread_create(&yellow_thread_data,yellow_stack,
@@ -477,7 +483,7 @@ void dispatcher_task(void *unused1, void *unused2, void *unused3)
 			}
 
 			else if (sequence[cnt] == 'G'){
-				printk("GREEN\n");
+				printk("Dispatcher GREEN\n");
 
 				//Create a thread
 				k_thread_create(&green_thread_data,green_stack,
@@ -496,7 +502,7 @@ void dispatcher_task(void *unused1, void *unused2, void *unused3)
 			}
 
 			else if (sequence[cnt] == 'F'){
-				printk("FLASH YELLOW\n");
+				printk("Dispatcher FLASH YELLOW\n");
 
 				//Create a thread
 				k_thread_create(&flash_thread_data,flash_stack,
@@ -520,12 +526,18 @@ void dispatcher_task(void *unused1, void *unused2, void *unused3)
 
 			cnt ++;
 		}
+		printk("Sequence total: %lld\n", sequence_total_us);
 	}
 }
 
 
 // Red led task
 void red_led_task(void *, void *, void*) {
+
+	//Start timer
+	timing_start();
+	timing_t red_start_time = timing_counter_get();
+
 	printk("Thread API red_led_task started\n");
 
 	// LED ON
@@ -538,11 +550,26 @@ void red_led_task(void *, void *, void*) {
 	//LED OFF
 	gpio_pin_set_dt(&red,0);
 	printk("Red off\n");
+
+	//Stop timer
+	timing_t red_end_time = timing_counter_get();
+	timing_stop();
+	//Read time to nanoseconds with start and end time
+	uint64_t timing_ns = timing_cycles_to_ns(timing_cycles_get(&red_start_time, &red_end_time));
+	//In microseconds
+	uint64_t timing_us = timing_ns / 1000;
+	//Add to total counter
+	sequence_total_us += timing_us;
+	printk("Red task timing %lld\n", timing_us);
 }
 
 
 // Green led task
 void green_led_task(void *, void *, void*) {
+
+	timing_start();
+	timing_t green_start_time = timing_counter_get();
+
 	printk("API Green led thread started\n");
 
 	// 1. set led on 
@@ -555,11 +582,24 @@ void green_led_task(void *, void *, void*) {
 	// 3. set led off
 	gpio_pin_set_dt(&green,0);
 	printk("Green off\n");
+
+	timing_t green_end_time = timing_counter_get();
+	timing_stop();
+	//Read time to nanoseconds with start and end time
+	uint64_t timing_ns = timing_cycles_to_ns(timing_cycles_get(&green_start_time, &green_end_time));
+	//In microseconds
+	uint64_t timing_us = timing_ns / 1000;
+	//Add to total counter
+	sequence_total_us += timing_us;
+	printk("green task timing %lld\n", timing_us);
 }
 
 
 // Yellow led task
 void yellow_led_task(void *, void *, void*) {
+	timing_start();
+	timing_t yellow_start_time = timing_counter_get();
+
 	printk("API yellow led thread started\n");
 
 	// 1. set led on 
@@ -574,6 +614,16 @@ void yellow_led_task(void *, void *, void*) {
 	gpio_pin_set_dt(&red,0);
 	gpio_pin_set_dt(&green,0);
 	printk("Yellow off\n");
+
+	timing_t yellow_end_time = timing_counter_get();
+	timing_stop();
+	//Read time to nanoseconds with start and end time
+	uint64_t timing_ns = timing_cycles_to_ns(timing_cycles_get(&yellow_start_time, &yellow_end_time));
+	//In microseconds
+	uint64_t timing_us = timing_ns / 1000;
+	//Add to total counter
+	sequence_total_us += timing_us;
+	printk("yellow task timing %lld\n", timing_us);
 }
 
 
