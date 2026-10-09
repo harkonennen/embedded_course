@@ -1,10 +1,2 @@
-# editors
-*.swp
-*~
-
-# build
+/.vscode
 /build*/
-/boards*/
-/README.rst
-/sample.yaml
-/CMakeLists.txt

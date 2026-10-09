@@ -4,12 +4,6 @@
 #include <zephyr/drivers/gpio.h>
 #include <zephyr/drivers/uart.h>
 
-/****************************
- * Remember to add line:
- * CONFIG_HEAP_MEM_POOL_SIZE=1024
- * to prj.conf
- ****************************/
-
 // Thread initializations
 #define STACKSIZE 500
 #define PRIORITY 5
@@ -17,9 +11,9 @@
 static const struct gpio_dt_spec red = GPIO_DT_SPEC_GET(DT_ALIAS(led0), gpios);
 static const struct gpio_dt_spec green = GPIO_DT_SPEC_GET(DT_ALIAS(led1), gpios);
 
-void red_led_task(void *, void *, void*);
-void yellow_led_task(void *, void *, void*);
-void green_led_task(void *, void *, void*);
+void red_led_task(void *duration_arg, void *, void*);
+void yellow_led_task(void *duration_arg, void *, void*);
+void green_led_task(void *duration_arg, void *, void*);
 
 void dispatcher_task(void *, void *, void*);
 void uart_task(void *, void *, void*);
@@ -174,6 +168,10 @@ void dispatcher_task(void *unused1, void *unused2, void *unused3)
 		printk("Dispatcher: %s\n", sequence);
 		int cnt = 0;
 
+		char color = sequence[0];
+        int time = atoi(sequence+2);
+		printk("Data: %c %d\n", color, time);
+
 		//tulostetaan merkki kerrallaan
 		while (sequence[cnt] != 0){
 			//printk("%c\n", sequence[cnt]);
@@ -184,7 +182,7 @@ void dispatcher_task(void *unused1, void *unused2, void *unused3)
 				k_thread_create(&red_thread_data,red_stack,
 								K_THREAD_STACK_SIZEOF(red_stack),
 								red_led_task,
-								NULL,
+								&time,
 								NULL,
 								NULL,
 								PRIORITY,
@@ -201,7 +199,7 @@ void dispatcher_task(void *unused1, void *unused2, void *unused3)
 				k_thread_create(&yellow_thread_data,yellow_stack,
 								K_THREAD_STACK_SIZEOF(yellow_stack),
 								yellow_led_task,
-								NULL,
+								&time,
 								NULL,
 								NULL,
 								PRIORITY,
@@ -218,7 +216,7 @@ void dispatcher_task(void *unused1, void *unused2, void *unused3)
 				k_thread_create(&green_thread_data,green_stack,
 								K_THREAD_STACK_SIZEOF(green_stack),
 								green_led_task,
-								NULL,
+								&time,
 								NULL,
 								NULL,
 								PRIORITY,
@@ -227,15 +225,14 @@ void dispatcher_task(void *unused1, void *unused2, void *unused3)
 							);
 				//Sleep until the thread exits (red thread runs through)
 				k_thread_join(&green_thread_data,K_FOREVER);
-			} else {
-				printk("Unknown input\n");
 			}
 			cnt ++;
 		}
 	}
 }
 
-void red_led_task(void *, void *, void*) {
+void red_led_task(void *duration_arg, void *, void*) {
+	int duration = *(int *)duration_arg;
 	printk("Thread API red_led_task started\n");
 
 		// LED ON
@@ -243,28 +240,29 @@ void red_led_task(void *, void *, void*) {
 		printk("Red on\n");
 
 		//SLEEP
-		k_sleep(K_SECONDS(1));
+		k_msleep(duration);
 
 		//LED OFF
 		gpio_pin_set_dt(&red,0);
 		printk("Red off\n");
 }
 
-void green_led_task(void *, void *, void*) {
+void green_led_task(void *duration_arg, void *, void*) {
+	int duration = *(int *)duration_arg;
 	printk("API Green led thread started\n");
 		// 1. set led on 
 		gpio_pin_set_dt(&green,1);
 		printk("GReen on\n");
 
 		// 2. sleep for 2 seconds
-		k_sleep(K_SECONDS(1));
-
+		k_msleep(duration);
 		// 3. set led off
 		gpio_pin_set_dt(&green,0);
 		printk("Green off\n");
 }
 
-void yellow_led_task(void *, void *, void*) {
+void yellow_led_task(void *duration_arg, void *, void*) {
+	int duration = *(int *)duration_arg;
 	printk("API yellow led thread started\n");
 
 		// 1. set led on 
@@ -273,7 +271,7 @@ void yellow_led_task(void *, void *, void*) {
 		printk("yellow on\n");
 
 		// 2. sleep for 2 seconds
-		k_sleep(K_SECONDS(1));
+		k_msleep(duration);
 
 		// 3. set led off
 		gpio_pin_set_dt(&red,0);
